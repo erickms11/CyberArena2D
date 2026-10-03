@@ -1,7 +1,7 @@
 'use strict';
 
 /* ==========================================================================
-   CYBER ARENA 2D - GAME ENGINE & MULTIPLAYER (Zero External Dependencies)
+   CYBER ARENA 2D - GAME ENGINE & MULTIPLAYER (Mobile Touch & Desktop)
    ========================================================================== */
 
 // Canvas & Context Setup
@@ -55,9 +55,9 @@ function playSound(type) {
       osc.stop(now + 0.12);
     } else if (type === 'pickup') {
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(523.25, now); // C5
-      osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
-      osc.frequency.setValueAtTime(783.99, now + 0.16); // G5
+      osc.frequency.setValueAtTime(523.25, now);
+      osc.frequency.setValueAtTime(659.25, now + 0.08);
+      osc.frequency.setValueAtTime(783.99, now + 0.16);
       gain.gain.setValueAtTime(0.25, now);
       gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
       osc.start(now);
@@ -83,13 +83,19 @@ function playSound(type) {
 }
 
 /* ==========================================================================
-   INPUT CONTROLLER
+   INPUT CONTROLLERS (Desktop Keyboard/Mouse + Mobile Virtual Touch Joystick)
    ========================================================================== */
 const keys = {};
 let mouseScreenPos = { x: 0, y: 0 };
 let mouseWorldPos = { x: 0, y: 0 };
 let isMouseDownLeft = false;
 let isMouseDownRight = false;
+
+// Touch State
+let touchMoveVector = { x: 0, y: 0 }; // Normalized (-1 to +1)
+let isTouchShooting = false;
+let isTouchDashing = false;
+let isTouchDevice = false;
 
 window.addEventListener('keydown', (e) => { keys[e.code] = true; });
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -107,6 +113,109 @@ window.addEventListener('mouseup', (e) => {
   if (e.button === 2) isMouseDownRight = false;
 });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// Initialize Virtual Touch Joystick
+function initTouchControls() {
+  const joystickZone = document.getElementById('joystick-left-zone');
+  const joystickKnob = document.getElementById('joystick-knob');
+  const btnShoot = document.getElementById('btn-touch-shoot');
+  const btnDash = document.getElementById('btn-touch-dash');
+
+  if (!joystickZone || !joystickKnob) return;
+
+  let activeTouchId = null;
+  let touchStartPos = { x: 0, y: 0 };
+  const maxRadius = 45;
+
+  joystickZone.addEventListener('touchstart', (e) => {
+    initAudio();
+    e.preventDefault();
+    if (activeTouchId === null && e.changedTouches.length > 0) {
+      const touch = e.changedTouches[0];
+      activeTouchId = touch.identifier;
+      const rect = joystickZone.getBoundingClientRect();
+      touchStartPos = {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      };
+      updateJoystick(touch.clientX, touch.clientY);
+    }
+  }, { passive: false });
+
+  joystickZone.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const touch = e.changedTouches[i];
+      if (touch.identifier === activeTouchId) {
+        updateJoystick(touch.clientX, touch.clientY);
+        break;
+      }
+    }
+  }, { passive: false });
+
+  const endJoystick = (e) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === activeTouchId) {
+        activeTouchId = null;
+        touchMoveVector = { x: 0, y: 0 };
+        joystickKnob.style.transform = `translate(0px, 0px)`;
+        break;
+      }
+    }
+  };
+
+  joystickZone.addEventListener('touchend', endJoystick, { passive: false });
+  joystickZone.addEventListener('touchcancel', endJoystick, { passive: false });
+
+  function updateJoystick(clientX, clientY) {
+    const dx = clientX - touchStartPos.x;
+    const dy = clientY - touchStartPos.y;
+    const dist = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+
+    const clampedDist = Math.min(dist, maxRadius);
+    const knobX = Math.cos(angle) * clampedDist;
+    const knobY = Math.sin(angle) * clampedDist;
+
+    joystickKnob.style.transform = `translate(${knobX}px, ${knobY}px)`;
+
+    // Vector normalized (-1 to +1)
+    touchMoveVector.x = Math.cos(angle) * (clampedDist / maxRadius);
+    touchMoveVector.y = -Math.sin(angle) * (clampedDist / maxRadius); // Invert Y for world coords
+  }
+
+  // Touch Shoot Button
+  if (btnShoot) {
+    btnShoot.addEventListener('touchstart', (e) => {
+      initAudio();
+      e.preventDefault();
+      btnShoot.classList.add('active');
+      isTouchShooting = true;
+    }, { passive: false });
+
+    btnShoot.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      btnShoot.classList.remove('active');
+      isTouchShooting = false;
+    }, { passive: false });
+  }
+
+  // Touch Dash Button
+  if (btnDash) {
+    btnDash.addEventListener('touchstart', (e) => {
+      initAudio();
+      e.preventDefault();
+      btnDash.classList.add('active');
+      isTouchDashing = true;
+    }, { passive: false });
+
+    btnDash.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      btnDash.classList.remove('active');
+      isTouchDashing = false;
+    }, { passive: false });
+  }
+}
 
 /* ==========================================================================
    CAMERA & COORDINATE CONVERSION
@@ -196,23 +305,37 @@ class LocalPlayerEntity {
   }
 
   update(dt) {
-    // Input Movement
+    // Input Movement (Desktop WASD + Mobile Touch Joystick)
     let dx = 0, dy = 0;
     if (keys['KeyW'] || keys['ArrowUp']) dy += 1;
     if (keys['KeyS'] || keys['ArrowDown']) dy -= 1;
     if (keys['KeyA'] || keys['ArrowLeft']) dx -= 1;
     if (keys['KeyD'] || keys['ArrowRight']) dx += 1;
 
-    // Mouse Angle Aim
-    mouseWorldPos = screenToWorld(mouseScreenPos.x, mouseScreenPos.y);
-    this.angle = Math.atan2(mouseWorldPos.y - this.y, mouseWorldPos.x - this.x);
+    // Combine keyboard input with touch joystick vector
+    if (touchMoveVector.x !== 0 || touchMoveVector.y !== 0) {
+      dx = touchMoveVector.x;
+      dy = touchMoveVector.y;
+    }
 
-    // Dash Action
+    // Aim Angle Calculation
+    if (touchMoveVector.x !== 0 || touchMoveVector.y !== 0) {
+      // Aim in direction of joystick movement
+      this.angle = Math.atan2(touchMoveVector.y, touchMoveVector.x);
+    } else {
+      // Aim towards mouse cursor on desktop
+      mouseWorldPos = screenToWorld(mouseScreenPos.x, mouseScreenPos.y);
+      this.angle = Math.atan2(mouseWorldPos.y - this.y, mouseWorldPos.x - this.x);
+    }
+
+    // Dash Action (Shift key, Right Mouse Button, or Mobile Dash Button)
     this.isDashing = false;
-    if ((keys['ShiftLeft'] || keys['ShiftRight'] || isMouseDownRight) && this.dashStamina >= 25 && this.dashCooldown <= 0) {
+    const dashRequested = keys['ShiftLeft'] || keys['ShiftRight'] || isMouseDownRight || isTouchDashing;
+    if (dashRequested && this.dashStamina >= 25 && this.dashCooldown <= 0) {
       this.isDashing = true;
       this.dashStamina -= 25;
       this.dashCooldown = 0.25;
+      isTouchDashing = false;
       playSound('dash');
       spawnParticles(this.x, this.y, this.color, 20, 8);
     }
@@ -232,14 +355,12 @@ class LocalPlayerEntity {
       this.vx += (dx / len) * speed * 4 * dt;
       this.vy += (dy / len) * speed * 4 * dt;
 
-      // Limit max speed
       const curSpeed = Math.hypot(this.vx, this.vy);
       if (curSpeed > speed) {
         this.vx = (this.vx / curSpeed) * speed;
         this.vy = (this.vy / curSpeed) * speed;
       }
 
-      // Thruster trail particles
       if (Math.random() < 0.4) {
         spawnParticles(
           this.x - Math.cos(this.angle) * 0.8,
@@ -264,8 +385,9 @@ class LocalPlayerEntity {
     cameraPos.x += (this.x - cameraPos.x) * 0.1;
     cameraPos.y += (this.y - cameraPos.y) * 0.1;
 
-    // Shoot Action
-    if (isMouseDownLeft && this.shootCooldown <= 0) {
+    // Shoot Action (Left Click or Mobile Shoot Button)
+    const shootRequested = isMouseDownLeft || isTouchShooting;
+    if (shootRequested && this.shootCooldown <= 0) {
       this.shootCooldown = 0.18;
       this.shootLaser();
     }
@@ -336,7 +458,7 @@ class LocalPlayerEntity {
     ctx.fill();
 
     // Aim Cannon Pointer
-    ctx.rotate(-this.angle); // Screen canvas Y is flipped
+    ctx.rotate(-this.angle);
     ctx.strokeStyle = this.color;
     ctx.lineWidth = 4;
     ctx.beginPath();
@@ -387,7 +509,6 @@ class RemotePlayerEntity {
   }
 
   update(dt) {
-    // Lerp position
     this.x += (this.targetX - this.x) * 0.25;
     this.y += (this.targetY - this.y) * 0.25;
 
@@ -508,7 +629,6 @@ class LaserBulletEntity {
     this.y += this.vy * dt;
     this.life -= dt;
 
-    // Check hit on local player
     if (this.ownerId !== selfSocketId && localPlayer) {
       const distSq = (this.x - localPlayer.x) ** 2 + (this.y - localPlayer.y) ** 2;
       if (distSq < 1.2) {
@@ -604,7 +724,6 @@ function drawArenaGrid() {
   ctx.strokeStyle = 'rgba(0, 243, 255, 0.08)';
   ctx.lineWidth = 1;
 
-  // Vertical & Horizontal Grid Lines
   for (let x = -bound; x <= bound; x += gridStep) {
     const p1 = worldToScreen(x, -bound);
     const p2 = worldToScreen(x, bound);
@@ -689,7 +808,6 @@ function handleServerMessage(msg) {
     case 'init_game_state': {
       selfSocketId = msg.selfId;
 
-      // Spawn Local Player
       const myData = msg.players.find(p => p.id === selfSocketId);
       if (myData) {
         localPlayer = new LocalPlayerEntity(myData.x, myData.y, myPlayerColor, myPlayerName);
@@ -698,7 +816,6 @@ function handleServerMessage(msg) {
         updateHUD();
       }
 
-      // Spawn Remote Players
       remotePlayersMap.clear();
       msg.players.forEach(pData => {
         if (pData.id !== selfSocketId) {
@@ -706,7 +823,6 @@ function handleServerMessage(msg) {
         }
       });
 
-      // Spawn Orbs
       orbsMap.clear();
       msg.orbs.forEach(oData => {
         orbsMap.set(oData.id, new OrbEntity(oData));
@@ -893,7 +1009,6 @@ function showToast(message) {
 
 // Window Initialization
 window.addEventListener('load', () => {
-  // Create & Mount Canvas inside #game-container
   const container = document.getElementById('game-container');
   canvas = document.createElement('canvas');
   ctx = canvas.getContext('2d');
@@ -905,6 +1020,9 @@ window.addEventListener('load', () => {
   }
   window.addEventListener('resize', resizeCanvas);
   resizeCanvas();
+
+  // Initialize Touch Controls
+  initTouchControls();
 
   // Parse Room Parameter from URL
   const urlParams = new URLSearchParams(window.location.search);
@@ -928,6 +1046,15 @@ window.addEventListener('load', () => {
     });
   });
 
+  // Mobile Chat Toggle Button
+  const btnToggleChat = document.getElementById('btn-toggle-chat');
+  const chatContainer = document.getElementById('chat-container');
+  if (btnToggleChat && chatContainer) {
+    btnToggleChat.addEventListener('click', () => {
+      chatContainer.classList.toggle('hidden-mobile');
+    });
+  }
+
   // Join Game Form
   document.getElementById('join-form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -950,9 +1077,9 @@ window.addEventListener('load', () => {
   document.getElementById('btn-share-link').addEventListener('click', () => {
     const shareUrl = window.location.href;
     navigator.clipboard.writeText(shareUrl).then(() => {
-      showToast('Link da sala copiado! Envie para seus amigos.');
+      showToast('Link da sala copiado!');
     }).catch(() => {
-      prompt('Copie o link abaixo para enviar aos amigos:', shareUrl);
+      prompt('Copie o link da sala:', shareUrl);
     });
   });
 
@@ -964,15 +1091,6 @@ window.addEventListener('load', () => {
     if (text && ws) {
       sendWS({ type: 'send_chat', text });
       input.value = '';
-    }
-  });
-
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      const chatInput = document.getElementById('chat-input');
-      if (document.activeElement !== chatInput) {
-        chatInput.focus();
-      }
     }
   });
 });
