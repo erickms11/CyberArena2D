@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: cyber-arena-2d
+    env: node
+    buildCommand: ""
+    startCommand: "node server.js"
+    envVars:
+      - key: PORT
+        value: 10000
