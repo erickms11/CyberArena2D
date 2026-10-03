@@ -47,7 +47,7 @@
       <div class="brand">
         <div class="logo-icon"><i class="fa-solid fa-gamepad"></i></div>
         <h1>CYBER ARENA <span>2D</span></h1>
-        <p class="tagline">Multiplayer Online • Suporte Mobile Minimalista</p>
+        <p class="tagline">Multiplayer Online • Foco Total na Tela</p>
       </div>
 
       <form id="join-form">
@@ -83,9 +83,9 @@
     </div>
   </div>
 
-  <!-- In-Game HUD Overlay -->
+  <!-- In-Game Minimalist HUD Overlay -->
   <div id="game-hud" class="hud-layer hidden">
-    <!-- Top Left Bar: Player Status & Score -->
+    <!-- Top Left Bar: Player Status & Score ONLY -->
     <div class="hud-top-left glass-hud">
       <div class="player-avatar-preview" id="hud-color-indicator"></div>
       <div class="player-info">
@@ -103,8 +103,8 @@
       </div>
     </div>
 
-    <!-- Top Right Bar: Room Info & Controls -->
-    <div class="hud-top-right glass-hud">
+    <!-- Top Right Bar: Room Info & Share Link (Desktop only or clean badge) -->
+    <div class="hud-top-right glass-hud desktop-only">
       <div class="room-info">
         <span class="room-badge"><i class="fa-solid fa-network-wired"></i> <span id="hud-room-id">lobby</span></span>
         <span class="ping-badge" id="hud-ping"><i class="fa-solid fa-bolt"></i> -- ms</span>
@@ -112,12 +112,9 @@
       <button class="btn-share" id="btn-share-link" title="Compartilhar Link da Sala">
         <i class="fa-solid fa-link"></i>
       </button>
-      <button class="btn-chat-toggle" id="btn-toggle-chat" title="Abrir/Fechar Chat">
-        <i class="fa-solid fa-comments"></i>
-      </button>
     </div>
 
-    <!-- Right Leaderboard (Collapsible on Mobile) -->
+    <!-- Right Leaderboard (Desktop Only) -->
     <div class="hud-leaderboard glass-hud desktop-only" id="hud-leaderboard">
       <div class="leaderboard-header">
         <i class="fa-solid fa-trophy"></i> Jogadores (<span id="player-count">1</span>)
@@ -132,17 +129,6 @@
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Mover</span>
       <span><kbd>CLICK</kbd> Atirar</span>
       <span><kbd>SHIFT</kbd> Dash</span>
-    </div>
-
-    <!-- Bottom Left Chat Box -->
-    <div class="hud-chat glass-hud hidden-mobile" id="chat-container">
-      <div class="chat-messages" id="chat-messages">
-        <div class="chat-msg system">Bem-vindo à Cyber Arena!</div>
-      </div>
-      <form id="chat-form" class="chat-form">
-        <input type="text" id="chat-input" placeholder="Conversar..." maxlength="80" autocomplete="off">
-        <button type="submit"><i class="fa-solid fa-paper-plane"></i></button>
-      </form>
     </div>
   </div>
 
